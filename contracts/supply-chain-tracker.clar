@@ -123,3 +123,49 @@
     total-checkpoints: (var-get checkpoint-counter)
   })
 )
+
+;; Update product status
+(define-public (update-product-status (product-id uint) (new-status (string-ascii 20)))
+  (let ((product (unwrap! (map-get? products { product-id: product-id }) ERR-NOT-FOUND)))
+    (asserts! (is-eq tx-sender (get current-holder product)) ERR-NOT-AUTHORIZED)
+    (map-set products
+      { product-id: product-id }
+      (merge product { status: new-status })
+    )
+    (ok true)
+  )
+)
+
+;; Get checkpoint by sequence
+(define-read-only (get-checkpoint-by-sequence (product-id uint) (sequence uint))
+  (match (map-get? product-checkpoints { product-id: product-id, sequence: sequence })
+    entry (map-get? checkpoints { checkpoint-id: (get checkpoint-id entry) })
+    none
+  )
+)
+
+;; Verify product authenticity
+(define-read-only (verify-product (product-id uint))
+  (match (map-get? products { product-id: product-id })
+    product (ok {
+      exists: true,
+      origin: (get origin product),
+      current-holder: (get current-holder product),
+      status: (get status product)
+    })
+    (ok { exists: false, origin: tx-sender, current-holder: tx-sender, status: "" })
+  )
+)
+
+;; Get full product history count
+(define-read-only (get-product-history-length (product-id uint))
+  (default-to u0 (get count (map-get? product-checkpoint-count { product-id: product-id })))
+)
+
+;; Check if user is current holder
+(define-read-only (is-current-holder (product-id uint) (user principal))
+  (match (map-get? products { product-id: product-id })
+    product (ok (is-eq user (get current-holder product)))
+    (ok false)
+  )
+)
